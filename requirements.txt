@@ -1,0 +1,12 @@
+flask
+python-dotenv
+pinecone
+langchain
+langchain-core
+langchain-community
+langchain-pinecone
+langchain-cohere
+cohere
+pypdf
+requests
+urllib3
