@@ -36,7 +36,7 @@ A sophisticated document-based question-answering chatbot that allows users to i
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/cr7ritesh/smartheal-chatbot.git
 cd Runverve
 ```
 
