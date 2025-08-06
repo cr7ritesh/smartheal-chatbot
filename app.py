@@ -26,7 +26,7 @@ def init_vectorstore():
             raise ValueError("API keys not found in environment variables")
         
         embeddings = CohereEmbeddings(
-            model="embed-english-v3.0",
+            model="embed-multilingual-light-v3.0",
             cohere_api_key=cohere_api_key
         )
         
@@ -83,7 +83,7 @@ def ask_question():
         
         retriever = app.vectorstore.as_retriever(search_kwargs={"k": 4})
         llm = ChatCohere(
-            model="command-r-plus",
+            model="command-light",
             cohere_api_key=cohere_api_key,
             temperature=0.1
         )
