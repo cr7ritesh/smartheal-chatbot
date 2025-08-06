@@ -1,5 +1,9 @@
 // Global variables
 let isAsking = false;
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let currentTranscription = '';
 
 // DOM elements
 const chatMessages = document.getElementById('chat-messages');
@@ -12,9 +16,7 @@ document.addEventListener('DOMContentLoaded', function() {
     scrollToBottom();
 });
 
-// Chat input setup
 function setupChatInput() {
-    // Enter key event
     questionInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -23,7 +25,6 @@ function setupChatInput() {
     });
 }
 
-// Ask question
 async function askQuestion() {
     const question = questionInput.value.trim();
     if (!question || isAsking) return;
@@ -32,25 +33,19 @@ async function askQuestion() {
     questionInput.disabled = true;
     askButton.disabled = true;
     
-    // Add user message to chat
     addMessage('user', question);
     questionInput.value = '';
     
-    // Add loading message
     const loadingId = addLoadingMessage();
     
     try {
         const response = await fetch('/ask', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ question: question })
         });
         
         const result = await response.json();
-        
-        // Remove loading message
         removeLoadingMessage(loadingId);
         
         if (result.success) {
@@ -72,7 +67,6 @@ async function askQuestion() {
     }
 }
 
-// Check system status
 async function checkStatus() {
     try {
         const response = await fetch('/status');
@@ -95,7 +89,6 @@ async function checkStatus() {
     }
 }
 
-// Add message to chat
 function addMessage(role, content) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -112,17 +105,13 @@ function addMessage(role, content) {
         </div>
     `;
     
-    // Remove empty chat message if it exists
     const emptyChat = chatMessages.querySelector('.empty-chat');
-    if (emptyChat) {
-        emptyChat.remove();
-    }
+    if (emptyChat) emptyChat.remove();
     
     chatMessages.appendChild(messageDiv);
     scrollToBottom();
 }
 
-// Add loading message
 function addLoadingMessage() {
     const loadingId = 'loading-' + Date.now();
     const messageDiv = document.createElement('div');
@@ -147,24 +136,17 @@ function addLoadingMessage() {
     
     chatMessages.appendChild(messageDiv);
     scrollToBottom();
-    
     return loadingId;
 }
 
-// Remove loading message
 function removeLoadingMessage(loadingId) {
     const loadingElement = document.getElementById(loadingId);
-    if (loadingElement) {
-        loadingElement.remove();
-    }
+    if (loadingElement) loadingElement.remove();
 }
 
-// Clear chat
 async function clearChat() {
     try {
-        const response = await fetch('/clear', {
-            method: 'POST'
-        });
+        const response = await fetch('/clear', { method: 'POST' });
         
         if (response.ok) {
             chatMessages.innerHTML = `
@@ -182,9 +164,182 @@ async function clearChat() {
     }
 }
 
-// Utility functions
+// Voice Recording Functions
+function updateRecordingUI(recording) {
+    const recordBtn = document.getElementById('record-btn');
+    const micIcon = document.getElementById('mic-icon');
+    const recordText = document.getElementById('record-text');
+    const recordingStatus = document.getElementById('recording-status');
+    
+    if (recording) {
+        recordBtn.classList.add('btn-danger');
+        recordBtn.classList.remove('btn-outline-primary');
+        micIcon.className = 'bi bi-stop-circle';
+        recordText.textContent = 'Stop Recording';
+        recordingStatus.textContent = 'Recording... Click stop when done.';
+    } else {
+        recordBtn.classList.remove('btn-danger');
+        recordBtn.classList.add('btn-outline-primary');
+        micIcon.className = 'bi bi-mic';
+        recordText.textContent = 'Record';
+        recordingStatus.textContent = '';
+    }
+}
+
+async function toggleRecording() {
+    if (!isRecording) {
+        startRecording();
+    } else {
+        stopRecording();
+    }
+}
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        const options = { mimeType: 'audio/wav' };
+        if (!MediaRecorder.isTypeSupported('audio/wav')) {
+            if (MediaRecorder.isTypeSupported('audio/webm')) {
+                options.mimeType = 'audio/webm';
+            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                options.mimeType = 'audio/mp4';
+            }
+        }
+        
+        console.log('Using MIME type:', options.mimeType);
+        
+        mediaRecorder = new MediaRecorder(stream, options);
+        audioChunks = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+            audioChunks.push(event.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: options.mimeType });
+            processAudioBlob(audioBlob);
+        };
+        
+        mediaRecorder.start();
+        isRecording = true;
+        updateRecordingUI(true);
+        
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        showAlert('Microphone access denied or not available', 'danger');
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+        isRecording = false;
+        updateRecordingUI(false);
+        document.getElementById('recording-status').textContent = 'Processing audio...';
+    }
+}
+
+async function processAudioBlob(audioBlob) {
+    try {
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.wav');
+        
+        const response = await fetch('/transcribe_audio', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            displayTranscriptionResult(result);
+        } else {
+            showAlert(result.error || 'Transcription failed', 'danger');
+        }
+    } catch (error) {
+        console.error('Error processing audio:', error);
+        showAlert('Error processing audio', 'danger');
+    } finally {
+        document.getElementById('recording-status').textContent = '';
+    }
+}
+
+async function handleAudioFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    document.getElementById('recording-status').textContent = 'Processing uploaded audio...';
+    
+    try {
+        const formData = new FormData();
+        formData.append('audio', file);
+        
+        const response = await fetch('/transcribe_audio', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            displayTranscriptionResult(result);
+        } else {
+            showAlert(result.error || 'Transcription failed', 'danger');
+        }
+    } catch (error) {
+        console.error('Error processing uploaded audio:', error);
+        showAlert('Error processing audio file', 'danger');
+    } finally {
+        document.getElementById('recording-status').textContent = '';
+        event.target.value = '';
+    }
+}
+
+function displayTranscriptionResult(result) {
+    currentTranscription = result.transcription;
+    
+    document.getElementById('transcription-text').innerHTML = `
+        <div class="fw-bold text-primary">"${escapeHtml(result.transcription)}"</div>
+        <small class="text-muted">Language: ${result.language.toUpperCase()}</small>
+    `;
+    
+    if (result.segments && result.segments.length > 1 && result.speaker_count > 1) {
+        let speakerInfo = `<strong>Speakers detected: ${result.speaker_count}</strong><br><div class="mt-2">`;
+        
+        result.segments.forEach((segment, index) => {
+            if (segment.text.trim()) {
+                speakerInfo += `<div class="mb-1">
+                    <span class="badge bg-secondary">${segment.speaker}</span>
+                    <small>"${escapeHtml(segment.text.trim())}"</small>
+                </div>`;
+            }
+        });
+        
+        speakerInfo += '</div>';
+        document.getElementById('speaker-info').innerHTML = speakerInfo;
+    } else {
+        document.getElementById('speaker-info').innerHTML = '<small class="text-muted">Single speaker detected</small>';
+    }
+    
+    document.getElementById('transcription-result').style.display = 'block';
+}
+
+function useTranscription() {
+    if (currentTranscription) {
+        document.getElementById('question-input').value = currentTranscription;
+        document.getElementById('transcription-result').style.display = 'none';
+        document.getElementById('question-input').focus();
+    }
+}
+
+function hideTranscription() {
+    document.getElementById('transcription-result').style.display = 'none';
+}
+
+// Utility Functions
 function showAlert(message, type) {
-    // Remove existing alerts
     const existingAlerts = document.querySelectorAll('.alert-dismissible');
     existingAlerts.forEach(alert => alert.remove());
     
@@ -195,16 +350,12 @@ function showAlert(message, type) {
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
     
-    // Insert at top of main content
     const mainContent = document.querySelector('.main-content');
     const firstChild = mainContent.querySelector('.d-flex');
     mainContent.insertBefore(alertDiv, firstChild.nextSibling);
     
-    // Auto-remove after 5 seconds
     setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
-        }
+        if (alertDiv.parentNode) alertDiv.remove();
     }, 5000);
 }
 

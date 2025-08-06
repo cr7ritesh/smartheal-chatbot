@@ -1,3 +1,8 @@
+/* ===========================================
+   SmartHeal Chatbot - Custom Styles
+   =========================================== */
+
+/* Global Styles */
 html, body {
     height: 100%;
 }
@@ -6,7 +11,10 @@ html, body {
     padding-top: 20px;
 }
 
-/* Chat Styles */
+/* ===========================================
+   Chat Interface
+   =========================================== */
+
 .chat-card {
     height: 600px;
     display: flex;
@@ -25,6 +33,7 @@ html, body {
     padding: 60px 20px;
 }
 
+/* Message Styling */
 .message {
     margin-bottom: 20px;
     display: flex;
@@ -74,7 +83,10 @@ html, body {
     background-color: var(--bs-body-bg);
 }
 
-/* Loading Animation */
+/* ===========================================
+   Loading Animation
+   =========================================== */
+
 .loading-message {
     display: flex;
     align-items: center;
@@ -107,20 +119,93 @@ html, body {
     }
 }
 
-/* System Status */
+/* ===========================================
+   UI Components
+   =========================================== */
+
 .system-status {
     background-color: var(--bs-gray-800);
     border-radius: 8px;
     padding: 15px;
 }
 
-/* Example Questions */
 .btn-outline-primary:hover {
     transform: translateY(-1px);
     transition: transform 0.2s ease;
 }
 
-/* Responsive Design */
+.alert {
+    border: none;
+    border-radius: 10px;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border-radius: 10px;
+}
+
+.card-header {
+    border-bottom: 1px solid var(--bs-border-color);
+    border-radius: 10px 10px 0 0 !important;
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.btn:focus {
+    box-shadow: none;
+}
+
+.form-control {
+    border-radius: 8px;
+    border: 1px solid var(--bs-border-color);
+}
+
+.form-control:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* ===========================================
+   Scrollbar Styling
+   =========================================== */
+
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: var(--bs-gray-700);
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: var(--bs-gray-600);
+    border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-gray-500);
+}
+
+/* ===========================================
+   Health Theme Colors
+   =========================================== */
+
+.text-health {
+    color: #28a745 !important;
+}
+
+.bg-health {
+    background-color: #28a745 !important;
+}
+
+/* ===========================================
+   Responsive Design
+   =========================================== */
+
 @media (max-width: 768px) {
     .main-content {
         padding-left: 15px;
@@ -142,70 +227,4 @@ html, body {
     .btn-toolbar {
         justify-content: center;
     }
-}
-
-/* Scrollbar Styling */
-.chat-messages::-webkit-scrollbar {
-    width: 6px;
-}
-
-.chat-messages::-webkit-scrollbar-track {
-    background: var(--bs-gray-700);
-}
-
-.chat-messages::-webkit-scrollbar-thumb {
-    background: var(--bs-gray-600);
-    border-radius: 3px;
-}
-
-.chat-messages::-webkit-scrollbar-thumb:hover {
-    background: var(--bs-gray-500);
-}
-
-/* Alert Styles */
-.alert {
-    border: none;
-    border-radius: 10px;
-}
-
-/* Card Styles */
-.card {
-    border: none;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    border-radius: 10px;
-}
-
-.card-header {
-    border-bottom: 1px solid var(--bs-border-color);
-    border-radius: 10px 10px 0 0 !important;
-}
-
-/* Button Styles */
-.btn {
-    border-radius: 8px;
-    font-weight: 500;
-}
-
-.btn:focus {
-    box-shadow: none;
-}
-
-/* Form Styles */
-.form-control {
-    border-radius: 8px;
-    border: 1px solid var(--bs-border-color);
-}
-
-.form-control:focus {
-    border-color: var(--bs-primary);
-    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
-}
-
-/* Health/Medical theme colors */
-.text-health {
-    color: #28a745 !important;
-}
-
-.bg-health {
-    background-color: #28a745 !important;
 }

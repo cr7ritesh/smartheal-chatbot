@@ -10,3 +10,12 @@ cohere
 pypdf
 requests
 urllib3
+openai-whisper
+torch
+torchaudio
+pyaudio
+wave
+speechrecognition
+pyannote.audio
+librosa
+soundfile

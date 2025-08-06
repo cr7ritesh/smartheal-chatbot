@@ -2,54 +2,42 @@ import os
 import logging
 from flask import Flask, render_template, request, jsonify, session
 from langchain_pinecone import PineconeVectorStore
-from langchain_cohere import CohereEmbeddings
-from langchain_cohere import ChatCohere
+from langchain_cohere import CohereEmbeddings, ChatCohere
 from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
 from pinecone import Pinecone as pc
+from speech_handler import speech_handler
 
-# Load environment variables
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Create Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "smartheal-secret-key-2024")
 
-# Configuration
 PINECONE_INDEX_NAME = "smartheal-docs"
 
 def init_vectorstore():
     """Initialize Pinecone vector store"""
     try:
-        # Get API keys
         cohere_api_key = os.environ.get("COHERE_API_KEY")
         pinecone_api_key = os.environ.get("PINECONE_API_KEY")
         
         if not cohere_api_key or not pinecone_api_key:
             raise ValueError("API keys not found in environment variables")
         
-        # Initialize embeddings
         embeddings = CohereEmbeddings(
             model="embed-english-v3.0",
             cohere_api_key=cohere_api_key
         )
         
-        # Initialize Pinecone client and check if index exists
         pine_client = pc(api_key=pinecone_api_key)
         if PINECONE_INDEX_NAME not in pine_client.list_indexes().names():
             raise ValueError(f"Pinecone index '{PINECONE_INDEX_NAME}' not found. Please run store_embed.py first.")
         
-        # Create vector store
-        vectorstore = PineconeVectorStore(
+        return PineconeVectorStore(
             index_name=PINECONE_INDEX_NAME,
             embedding=embeddings
         )
-        
-        return vectorstore
-    
     except Exception as e:
         logging.error(f"Error initializing vector store: {str(e)}")
         raise
@@ -65,11 +53,9 @@ except Exception as e:
 @app.route('/')
 def index():
     """Main page"""
-    # Don't reset session on every load - only initialize if needed
     if 'messages' not in session:
         session['messages'] = []
     
-    # Check if API keys are available and vector store is ready
     cohere_api_key = os.environ.get("COHERE_API_KEY")
     pinecone_api_key = os.environ.get("PINECONE_API_KEY")
     
@@ -91,12 +77,10 @@ def ask_question():
         if not app.vectorstore:
             return jsonify({'error': 'Vector store not available. Please ensure embeddings are loaded in Pinecone.'}), 400
         
-        # Get API key
         cohere_api_key = os.environ.get("COHERE_API_KEY")
         if not cohere_api_key:
             return jsonify({'error': 'COHERE API key not configured'}), 500
         
-        # Create QA chain
         retriever = app.vectorstore.as_retriever(search_kwargs={"k": 4})
         llm = ChatCohere(
             model="command-r-plus",
@@ -111,17 +95,14 @@ def ask_question():
             return_source_documents=False,
         )
         
-        # Get answer
         response = qa_chain.invoke({"query": question})["result"]
         
-        # Update session messages
         if 'messages' not in session:
             session['messages'] = []
         
         session['messages'].append({"role": "user", "content": question})
         session['messages'].append({"role": "assistant", "content": response})
         
-        # Keep only last 20 messages to prevent session from growing too large
         if len(session['messages']) > 20:
             session['messages'] = session['messages'][-20:]
         
@@ -137,6 +118,62 @@ def ask_question():
         logging.error(f"Question answering error: {str(e)}")
         return jsonify({'error': f'Error getting answer: {str(e)}'}), 500
 
+@app.route('/transcribe_audio', methods=['POST'])
+def transcribe_audio():
+    """Handle audio transcription"""
+    try:
+        if 'audio' not in request.files:
+            return jsonify({'error': 'No audio file provided'}), 400
+        
+        audio_file = request.files['audio']
+        if audio_file.filename == '':
+            return jsonify({'error': 'No audio file selected'}), 400
+        
+        print(f"Received audio file: {audio_file.filename}")
+        
+        temp_file_path = speech_handler.save_uploaded_audio(audio_file)
+        result = speech_handler.process_audio_file(temp_file_path)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'transcription': result['full_text'],
+                'language': result['language'],
+                'segments': result['segments'],
+                'speaker_count': result['speaker_count']
+            })
+        else:
+            return jsonify({'error': result.get('error', 'Transcription failed')}), 500
+            
+    except Exception as e:
+        logging.error(f"Audio transcription error: {str(e)}")
+        return jsonify({'error': f'Error processing audio: {str(e)}'}), 500
+
+@app.route('/record_audio', methods=['POST'])
+def record_audio():
+    """Handle audio recording from server side"""
+    try:
+        data = request.get_json()
+        duration = data.get('duration', 10)
+        
+        temp_file_path = speech_handler.record_audio(duration)
+        result = speech_handler.process_audio_file(temp_file_path)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'transcription': result['full_text'],
+                'language': result['language'],
+                'segments': result['segments'],
+                'speaker_count': result['speaker_count']
+            })
+        else:
+            return jsonify({'error': result.get('error', 'Recording failed')}), 500
+            
+    except Exception as e:
+        logging.error(f"Audio recording error: {str(e)}")
+        return jsonify({'error': f'Error recording audio: {str(e)}'}), 500
+
 @app.route('/clear', methods=['POST'])
 def clear_chat():
     """Clear chat history"""
@@ -150,15 +187,19 @@ def get_status():
     try:
         cohere_api_key = os.environ.get("COHERE_API_KEY")
         pinecone_api_key = os.environ.get("PINECONE_API_KEY")
+        huggingface_token = os.environ.get("HUGGINGFACE_TOKEN")
         
-        # Test vector store
         vectorstore_status = "ready" if app.vectorstore else "not_ready"
         
-        # Get document count if available
+        speech_status = {
+            'whisper_loaded': speech_handler.whisper_model is not None,
+            'diarization_available': speech_handler.diarization_pipeline is not None,
+            'supported_languages': speech_handler.supported_languages
+        }
+        
         doc_count = 0
         if app.vectorstore:
             try:
-                # Try a simple search to verify the index has documents
                 test_results = app.vectorstore.similarity_search("test", k=1)
                 doc_count = len(test_results) if test_results else 0
             except:
@@ -167,9 +208,11 @@ def get_status():
         return jsonify({
             'cohere_api_key': bool(cohere_api_key),
             'pinecone_api_key': bool(pinecone_api_key),
+            'huggingface_token': bool(huggingface_token),
             'vectorstore_status': vectorstore_status,
             'document_count': doc_count,
-            'index_name': PINECONE_INDEX_NAME
+            'index_name': PINECONE_INDEX_NAME,
+            'speech_capabilities': speech_status
         })
     
     except Exception as e:
